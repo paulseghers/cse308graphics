@@ -34,6 +34,11 @@ Vector operator*(const Vector& a, double t) { //I want it to go both ways becaus
 	return Vector(a.x*t, a.y*t, a.z*t);
 }
 
+std::ostream& operator<<(std::ostream& os, const Vector& V){
+	os<<"("<<V.x<<", "<<V.y<<", "<<V.z<<")";
+	return os;
+}
+
 double dot(const Vector& a, const Vector& b) {
 	return double (a.x*b.x + a.y*b.y + a.z*b.z);
 }
@@ -48,7 +53,7 @@ struct Sphere{
 	double R;
 	Sphere(){}
 	Sphere(const Vector& c, const Vector& albedo, double R):
-		C(c),albedo(albedo), R(R)
+		C(c), albedo(albedo), R(R)
 	{}
 };
 
@@ -80,7 +85,7 @@ struct Lightsource{
 	Lightsource(const Vector& spot, double i, const Vector& c):
 		spot(spot), I(i), hue(c)
 	{}
-}
+};
 
 
 struct Scene{
@@ -101,7 +106,7 @@ Intersection intersect(const Sphere& sf, const Ray& ry){
 	double t;
 	Vector OmC = ry.O-sf.C;
 	double kk = dot(ry.u, OmC);
-	double delta = kk*kk-(dot(OmC, OmC)-sf.R);
+	double delta = kk*kk-(dot(OmC, OmC)-sf.R*sf.R);
 	if (delta >= 0){
 		double t1 = -kk - sqrt(delta); //dot(u, C - O) = dot(u, -OmC) = -kk
 		double t2 = -kk + sqrt(delta);
@@ -113,9 +118,15 @@ Intersection intersect(const Sphere& sf, const Ray& ry){
 			t = t1;
 		}
 		if (t1 < 0){
-			intersecB = true;
-			t = t2;
+			if(t2 >= 0){
+				intersecB = true;
+				t = t2;
+			}
+			else{
+				intersecB = false;
+			}
 		}
+
 	}else{
 		intersecB = false;
 	}
@@ -130,13 +141,14 @@ Intersection intersect(const Sphere& sf, const Ray& ry){
 
 //Intersection: point, normal, dist
 
-Intersection intersect(const Scene& sn, const Ray& ry){
+Vector intersect(const Scene& sn, const Ray& ry){
 	double curr_t = 1e16;
 	bool intersex = 0;
 	Sphere kept_ball;
-	Vector bgcolor(0, 0, 0); 
+	Vector bgcolor(0, 0, 0);
+	Vector ro = bgcolor; 
+	Vector perceived=bgcolor;
 	Intersection keep;
-
 
 	for(auto& ball: sn.welt){
 		Intersection Ic = intersect(ball, ry);
@@ -145,19 +157,39 @@ Intersection intersect(const Scene& sn, const Ray& ry){
 			curr_t = t;
 			keep = Ic;
 			kept_ball = ball;
+			//std::cout<<"kept_ball: center="<<ball.C<<" albedo="<<ball.albedo<<std::endl;
 			intersex = 1;
-			Vector surfacecolor = ball.albedo;
+			ro = ball.albedo;
+			//std::cout<<ball.albedo<<std::endl;
+		}
 	}
 	if(intersex){
+		//Vector perceived(0, 0, 0);
 		for(auto& ly: sn.lights){
-			pairwiseyoink(surfacecolor, )
+			double d = norm(ly.spot - keep.point);
+			double dotprod_kanker = dot(keep.normal, (ly.spot - keep.point)*(1/d));
+			double chungus1 = ly.I/(4*pi*d*d);
+			Vector chungus2 = ro*(1/pi);
+			//std::cout<<"dotprod= "<<dotprod_kanker<<"chungus1= "<<chungus1<<"chungus2= "<<chungus2<<std::endl;
+			perceived += ly.I/(4*pi*d*d) * ro*(1/pi) * dotprod_kanker; //deze variable heest kanker dus het kanker is
 		}
+		//std::cout<<" perceived color: "<<perceived<<std::endl;
+		return perceived;
+		//return Vector(255, 255, 255);
 	}else{
 		return bgcolor;
 	}
 }
 
-
+int clamp(double c){
+	if(c<0){
+		return 0;
+	}
+	if(c>255){
+		return 255;
+	}
+	return c;
+}
 
 int main(){
 	double fov = pi*60/180;
@@ -166,8 +198,10 @@ int main(){
 	zouglou.welt.push_back({Vector(0, 1000, 0), Vector(0xff, 0, 0), 940});
 	zouglou.welt.push_back({Vector(0, 0,-1000), Vector(0, 0xff, 0), 940});
 	zouglou.welt.push_back({Vector(0,-1000, 0), Vector(0, 0, 0xff), 940});
-	zouglou.welt.push_back({Vector(0, 0, 0), Vector(0xff, 0xff, 0xff), 940});
+	zouglou.welt.push_back({Vector(0, 0, 1), Vector(0xff, 0xff, 0xff), 10});
+	zouglou.lights.push_back({Vector(-10, 20, 40), 2e9, Vector(0xff, 0xff, 0xff)});
 	Vector Q(0, 0, 55);
+	//std::cout<<zouglou.welt[0].C;
 	int w = 600;
 	int h = 400; 
 	uint8_t img[h][w][3]; //3 for r g b 
@@ -175,11 +209,12 @@ int main(){
 		for (int j=0; j<w; j++){
 			Vector u(j+0.5-w/2, (h-i-1)+0.5-h/2, -w/(2*fov));
 			Ray ry(normalize(u), Q);
-			Intersection Ic = intersect(zouglou, ry);
-			if (Ic.hmm){
-				img[i][j][0] = 255;
-				img[i][j][1] = 255;
-				img[i][j][2] = 255;
+			Vector seen_color = intersect(zouglou, ry);
+			if (seen_color.x or seen_color.y or seen_color.z){
+				//std::cout<<seen_color.x;
+				img[i][j][0] = clamp(seen_color.x);
+				img[i][j][1] = clamp(seen_color.y);
+				img[i][j][2] = clamp(seen_color.z);
 			}
 		}
 	}
