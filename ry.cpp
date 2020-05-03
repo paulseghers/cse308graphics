@@ -1,6 +1,8 @@
 #include<bits/stdc++.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include"stb_image_write.h"
+#include<omp.h>
+//#pragma once
 double pi = acos(-1);
 
 struct Vector{
@@ -47,6 +49,13 @@ Vector pairwiseyoink(const Vector& a, const Vector& b) {
 	return Vector (a.x*b.x, a.y*b.y, a.z*b.z);
 }
 
+Vector crossprod(const Vector& a, const Vector& b){
+	return Vector(
+		a.y*b.z - a.z*b.y,
+        a.z*b.x - a.x*b.z,
+        a.x*b.y - a.y*b.x);
+}
+
 struct Sphere{
 	Vector C;
 	Vector albedo;
@@ -84,9 +93,10 @@ struct Lightsource{
 	Vector spot;
 	double I;
 	Vector hue;
+	double radius;
 	Lightsource(){}
-	Lightsource(const Vector& spot, double i, const Vector& c):
-		spot(spot), I(i), hue(c)
+	Lightsource(const Vector& spot, double i, const Vector& c, double r):
+		spot(spot), I(i), hue(c), radius(r)
 	{}
 };
 
@@ -111,6 +121,11 @@ double norm(const Vector& V){
 Vector normalize(const Vector& V){
 	return V*(1/norm(V));
 }
+
+/* ##### FUN FUNCTIONS */
+#include"spicy_lighting_stuff.h"
+
+
 
 Intersection intersect(const Sphere& sf, const Ray& ry){
 	double pepsilon = 1e-4;
@@ -167,15 +182,17 @@ Vector refRacc_this_pls(const Vector& incoming, const Vector& normal, double n1s
 	Vector wTang = n1surn2 * (incoming - dotprod*normal);
 	double chungusinsidethesqrt = 1 - n1surn2*n1surn2*(1-dotprod*dotprod);
 	if (chungusinsidethesqrt<0){return refLecc_this_pls(incoming, normal);}
-	std::cout<<"got in/out ;) \n";
+	//std::cout<<"got in/out ;) \n";
 	Vector wNorm = -1*normal*sqrt(chungusinsidethesqrt);
 	return wTang+wNorm;
 }
 
 
 Vector intersect(const Scene& sn, const Ray& ry, int depth){
-	if (depth<5){std::cout<<"ry: ("<<ry.u<<", "<<ry.O<<")"<<" dpth: "<<depth<<std::endl;}
+	//if (depth<5){std::cout<<"ry: ("<<ry.u<<", "<<ry.O<<")"<<" dpth: "<<depth<<std::endl;}
 	if (depth<0){return {0, 0, 0};} // check its ok
+	
+// std::cout << ry.u;
 	double curr_t = 1e16;
 	bool intersex = 0;
 	Sphere kept_ball;
@@ -205,9 +222,37 @@ Vector intersect(const Scene& sn, const Ray& ry, int depth){
 				double chungus1 = ly.I/(4*pi*d*d);
 				Vector chungus2 = ro*(1/pi);
 				//std::cout<<"dotprod= "<<dotprod_kanker<<"chungus1= "<<chungus1<<"chungus2= "<<chungus2<<std::endl;
+				Vector checking_vec = keep.point-ly.spot; //we need a vec to do a check
+				
+				Vector checkvec_normalized = normalize(checking_vec);
+				Vector new_origin =  ly.spot+eel_slap(checkvec_normalized, random_cos())*ly.radius;
+				Ray checking_ry = Ray(normalize(keep.point-new_origin), new_origin);
+				double george = norm(keep.point-new_origin);
+				bool theressmthindawae = 0;
+				for(auto& sphe: sn.welt){
+					Intersection checking_intersec = intersect(sphe, checking_ry);
+					double d = checking_intersec.dist;
+					//std::cout<<"big G: "<<george<<std::endl;
+					//std::cout<<"big d: "<<d<<std::endl;
+					if (d < george-0.0001){
+						/*std::cout<<"george: "<<george<<std::endl;
+						std::cout<<"new_origin: "<<new_origin<<std::endl;
+						std::cout<<"keep.point: "<<keep.point<<std::endl;
+						std::cout<<"d: "<<d<<std::endl;
+						std::cout<<"checking_vec: "<<checkvec_normalized<<std::endl;
+						std::cout<<"checking_ry: "<<checking_ry.u<<", "<<checking_ry.O<<std::endl;
+						std::cout<<"chungycheck: "<<norm(ry.u)<<std::endl;*/
+						theressmthindawae = 1;
+					}
+				}
+				if (!theressmthindawae)
 				perceived += ly.I/(4*pi*d*d) * ro*(1/pi) * dotprod_kanker; //deze variable heest kanker dus het kanker is
 			}
-			return perceived;
+			//zici
+			Vector sampled = random_cos();
+			//assert(dot(keep.normal, ry.u) < 0);
+			Ray diffuse_ry = Ray(eel_slap(keep.normal, sampled), keep.point);
+			return perceived+pairwiseyoink(intersect(sn, diffuse_ry, depth-1),kept_ball.albedo);
 			//return Vector(255, 255, 255);
 		}
 		else if(kept_ball.typ == Sphere::reflec){
@@ -245,32 +290,48 @@ int clamp(double c){
 	return c;
 }
 
+int gamma_correct(double c){
+	if(c<0)return 0;
+	if(c>1)return 255;
+	return 255*pow(c, 1/2.2);
+}
+
 int main(){
+	//double fov = pi*60/180;
 	double fov = pi*60/180;
-	double intensity = 1e5;
+	double intensity = 1e4;
 	Scene zouglou;
-	zouglou.welt.push_back({Vector(0, 0, 1000), Vector(0xff, 0, 0xff), 940, Sphere::solid});
-	zouglou.welt.push_back({Vector(0, 1000, 0), Vector(0xff, 0, 0), 940, Sphere::solid});
-	zouglou.welt.push_back({Vector(0, 0,-1000), Vector(0, 0xff, 0), 940, Sphere::solid});
-	zouglou.welt.push_back({Vector(0,-1000, 0), Vector(0, 0, 0xff), 990, Sphere::solid});
-	zouglou.welt.push_back({Vector(0, 0, 1), Vector(0xff, 0xff, 0xff), 9, Sphere::trans, 1.0/1.5});
-	zouglou.welt.push_back({Vector(0, 0, 1), Vector(0xff, 0xff, 0xff), 10, Sphere::trans, 1.5});
-	zouglou.lights.push_back({Vector(-10, 20, 40), intensity, Vector(0xff, 0xff, 0xff)});
+	zouglou.welt.push_back({Vector(0, 0, 1000), Vector(0xff, 0, 0xff)*(1.0/255.0), 940, Sphere::solid}); //if vectors are too big they make light
+	zouglou.welt.push_back({Vector(0, 1000, 0), Vector(0xff, 0, 0)*(1.0/255.0), 940, Sphere::solid});
+	zouglou.welt.push_back({Vector(0, 0,-1000), Vector(0, 0xff, 0)*(1.0/255.0), 940, Sphere::solid});
+	zouglou.welt.push_back({Vector(0,-1000, 0), Vector(0, 0, 0xff)*(1.0/255.0), 990, Sphere::solid});
+	//zouglou.welt.push_back({Vector(0, 0, 1), Vector(0xff, 0xff, 0xff), 9, Sphere::trans, 1.0/1.5});
+	//zouglou.welt.push_back({Vector(0, 0, 1), Vector(0xff, 0xff, 0xff), 10, Sphere::trans, 1.5});
+	zouglou.welt.push_back({Vector(0, 0, 0), Vector(0xff, 0xff, 0xff)*(1.0/255.0), 10, Sphere::solid});
+	zouglou.lights.push_back({Vector(-20, 20, 25), intensity, Vector(0xff, 0xff, 0xff)*(1.0/255.0), 10});
 	Vector Q(0, 0, 55);
 	//std::cout<<zouglou.welt[0].C;
-	int w = 600;
-	int h = 400; 
+	int w = 1000;
+	int h = 900; 
 	uint8_t img[h][w][3]; //3 for r g b 
+#pragma omp parallel for
 	for (int i=0; i<h; i++){
 		for (int j=0; j<w; j++){
 			Vector u(j+0.5-w/2, (h-i-1)+0.5-h/2, -w/(2*fov));
-			Ray ry(normalize(u), Q);
-			Vector seen_color = intersect(zouglou, ry, 5);
+			Vector seen_color = {0, 0, 0};
+			for (int k = 0; k <20; k++){
+				double dx, dy;
+				BoxMuller(0.9, dx, dy);
+				Vector pepsilon2d = {dx, dy, 0};
+				Ray ry(normalize(u+pepsilon2d), Q);
+				seen_color += intersect(zouglou, ry, 5);
+			}
+			seen_color = seen_color*(1.0/20);
 			if (seen_color.x or seen_color.y or seen_color.z){
 				//std::cout<<seen_color.x;
-				img[i][j][0] = clamp(seen_color.x);
-				img[i][j][1] = clamp(seen_color.y);
-				img[i][j][2] = clamp(seen_color.z);
+				img[i][j][0] = gamma_correct(seen_color.x);
+				img[i][j][1] = gamma_correct(seen_color.y);
+				img[i][j][2] = gamma_correct(seen_color.z);
 			}
 		}
 	}
