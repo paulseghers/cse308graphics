@@ -1,5 +1,3 @@
-double pi = acos(-1);
-
 struct Vector{
 double x, y, z;
 	Vector(){}
