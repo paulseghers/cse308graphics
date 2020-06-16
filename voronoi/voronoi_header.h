@@ -49,42 +49,46 @@ Vector orthogonal(const Vector& v){
 	return Vector(-v.y, v.x);
 }
 
-Vector intersexual(Vector& a, Vector& b, Vector& p){
-	Vector p_orth = orthogonal(p);
-	Vector AB = b - a;
-	double t = crossprod(p-a, AB)/crossprod(p_orth, AB);
-	return p - t*p_orth;
+Vector intersexual(Vector& a, Vector& b, Vector& h, double th){
+    double va = dot(a,h),
+           vb = dot(b,h);
+    double wa = (th-vb)/(va-vb),
+           wb = 1.0-wa;
+    return a*wa + b*wb;
+}
+
+double norm(Vector v){
+	return sqrt(dot(v, v));
 }
 
 struct polygre{
 	std::vector<Vector> corners;
 	Vector centerpunkt;
 	polygre(Vector p){
-		corners = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
+		corners = std::vector<Vector>{ Vector{0, 0}, {1, 0}, {1, 1}, {0, 1}};
 		centerpunkt = p;
 		for_each(corners.begin(), corners.end(), [&p](Vector& v){v = v-p;});
-	} /*											 |   */
-	void intersex_with_halfplane(Vector h){ // --h-> | plane line
-		int n = corners.size();					/*   |   */
-		double th = dot(h, h);
+	} /*										          	   |   */
+	void intersex_with_halfplane(Vector M, Vector h){ // --h-> M plane line
+		int n = corners.size();					          /*   |   */
+		double th = dot(M, h);
 		auto indapussy = [&](Vector & v){return dot(v, h) < th; };
-		bool zoukneeded = false;
+		bool zoukneeded = false, veryzouky = false;
 		for (auto& c : corners){
 			if (dot(c, h) > th) zoukneeded = true;
+            else veryzouky = true;
 		}
 		if (!zoukneeded) return;
-		//if (!all_of(corners.begin(), corners.end(), indapussy)){ //functional programming with sex metafors
-		//	return;
-		//}
-		std::cout<<"we did an intersex"<<std::endl;
+        if (!veryzouky) { corners = {}; return; }
+
+		// std::cout<<"we did an intersex"<<std::endl;
 		int i, j;
 		for(i = 0; indapussy(corners[i]); i++); //i is now the first guy out of da pusi
 		for(j = i; !indapussy(corners[j%n]); j++); //first guy back in da pusi :D
 		for(i = j; indapussy(corners[i%n]); i++);  //i is now the first guy out of da pusi but FOR REAL THIS TIME >:)		
-		//paJeet = dot(h, corner[j%n]);
-		//pa1eet = dot(h, corner[(j-1)%n]); 
-		Vector jntersext = intersexual(corners[(j-1)%n], corners[j%n], h);
-		Vector intersext = intersexual(corners[(i-1)%n], corners[i%n], h);//we modulo n every. fucking. where. just to be sure :') no alarms and no surprises
+
+		Vector jntersext = intersexual(corners[(j-1)%n], corners[j%n], h, th);
+		Vector intersext = intersexual(corners[(i-1)%n], corners[i%n], h, th);//we modulo n every. fucking. where. just to be sure :') no alarms and no surprises
 		std::vector<Vector> newcorns;
 		newcorns.push_back(intersext); 
 		newcorns.push_back(jntersext);
@@ -93,6 +97,22 @@ struct polygre{
 		}
 		std::swap(corners, newcorns);
 	}
+    double territory() {
+        double ter = 0;
+        for (int i=1; i<(int)corners.size()-1; i++) {
+            ter += crossprod(corners[i]-corners[0], corners[i+1]-corners[0])/2;
+        }
+        return ter;
+    }
+    double secondmom() {
+        int N = corners.size();
+        double mom = 0;
+        for (int i=0; i<N; i++) {
+            Vector a = corners[i], b = corners[(i+1) % N];
+            mom += crossprod(a,b) * ( dot(a,a)+dot(a,b)+dot(b,b)) / 12;
+        }
+        return mom;
+    }
 };
 
 std::ostream& operator<<(std::ostream& os, const polygre& P){
