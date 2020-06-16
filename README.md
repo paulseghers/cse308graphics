@@ -1,6 +1,6 @@
 this is what I can do
 
-![polygons](voronoi/snouglou.svg)
+![polygons](voronoi/snoglou.svg)
 
 didn't have time to do water :(
 
